@@ -1,0 +1,62 @@
+name: Readiness Pack Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "release-readiness-pack/**"
+      - ".github/workflows/readiness-pack-check.yml"
+  push:
+    branches: [feature/readiness-pack]
+    paths:
+      - "release-readiness-pack/**"
+      - ".github/workflows/readiness-pack-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  readiness-pack:
+    name: Validate readiness pack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required documents and non-empty content
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            release-readiness-pack/validation-results.md
+            release-readiness-pack/config-verification.md
+            release-readiness-pack/dependency-checks.md
+            release-readiness-pack/rollback-plan.md
+            release-readiness-pack/risk-analysis.md
+            release-readiness-pack/ownership.md
+            release-readiness-pack/readiness-report.md
+          )
+          for file in "${required[@]}"; do
+            if [[ ! -s "$file" ]]; then
+              echo "::error file=$file::Required document is missing or empty"
+              exit 1
+            fi
+            echo "OK: $file"
+          done
+
+      - name: Check release decision is explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eiq 'Decision.*NO-GO|Recommendation.*NO-GO' release-readiness-pack/readiness-report.md
+          grep -Eiq 'Worst unresolved risk.*High' release-readiness-pack/readiness-report.md
+          echo "Explicit NO-GO and High unresolved risk are recorded."
+
+      - name: Check evidence integrity and release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eiq 'NOT EXECUTED|not executed|NOT RUN|not run|not verified|NOT VERIFIED' release-readiness-pack/validation-results.md
+          grep -Eiq 'v2.3' release-readiness-pack/rollback-plan.md
+          grep -Eiq 'severity|likelihood|mitigation|owner' release-readiness-pack/risk-analysis.md
+          echo "Evidence status, rollback target, and risk ownership fields are present."
